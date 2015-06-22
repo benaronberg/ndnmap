@@ -158,7 +158,7 @@ public:
     for(auto it = m_linksList.begin(); it != m_linksList.end(); ++it)
     {
       std::list<linkPair> linkList = it->second;
-      ndn::Name name(it->first+APP_SUFFIX);
+      ndn::Name name(it->first);
       
       std::list<linkPair>::iterator itList;
       for (itList=linkList.begin(); itList!=linkList.end(); ++itList)
