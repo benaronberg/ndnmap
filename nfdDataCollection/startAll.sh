@@ -53,24 +53,41 @@ done
 
 # start nfdstat_c on all machines
 echo "start nfdstat_c on all machines"
-
-INTEREST_FILTER=$1
-echo "INTEREST_FILTER: $INTEREST_FILTER"
+started_nfdstat=()
 for s in "${ROUTER_HOST_PAIRS[@]}" 
 do
   pair_info=(${s//:/ })
   ROUTER=${pair_info[0]}
   HOST=${pair_info[1]}
-  
   echo "nfdstat_c -p $INTEREST_FILTER"
-  ssh ${!ROUTER} "cd $CWD ; echo 'nfdstat_c logfile\nnfd pid: ' > nfdstat.log ; ./getNfdPid.sh >> nfdstat.log  ; ./build/nfdstat_c -p $INTEREST_FILTER -d 1 >> nfdstat.log "
-  ssh ${!HOST} "cd $CWD ; echo 'nfdstat_c logfile\nnfd pid: ' > nfdstat.log ; ./getNfdPid.sh >> nfdstat.log  ; ./build/nfdstat_c -p $INTEREST_FILTER -d 1 >> nfdstat.log "
+  # array_contains defined in helperFunctions
+  if ! array_contains $started_nfdstat $ROUTER
+  then
+    # start nfd on ROUTER
+    ssh ${!ROUTER} "cd $CWD ; echo 'nfdstat_c logfile\nnfd pid: ' > nfdstat.log ; ./getNfdPid.sh >> nfdstat.log  ; ./build/nfdstat_c -p $INTEREST_FILTER -d 1 >> nfdstat.log"
+    started_nfdstat+=("$ROUTER")
+  fi
+  # start nfd on HOST
+  ssh ${!HOST} "cd $CWD ; echo 'nfdstat_c logfile\nnfd pid: ' > nfdstat.log ; ./getNfdPid.sh >> nfdstat.log  ; ./build/nfdstat_c -p $INTEREST_FILTER -d 1 >> nfdstat.log" 
 done
 
-# start nfdstat_s on WU host
-echo "start nfdstat_s"
-ssh $h9x2 "cd $CWD ; echo 'nfdstat_s logfile' > nfdstatserver.log ; ./build/nfdstat_s -f linksList.6RTRs -n 12 >> nfdstatserver.log"
 
-
-
+# start nfdstat_c on all machines
+#echo "start nfdstat_c on all machines"
+#
+#INTEREST_FILTER=$1
+#for s in "${ROUTER_HOST_PAIRS[@]}" 
+#do
+#  pair_info=(${s//:/ })
+#  ROUTER=${pair_info[0]}
+#  HOST=${pair_info[1]}
+#  
+#  echo "nfdstat_c -p $INTEREST_FILTER"
+#  ssh ${!ROUTER} "cd $CWD ; echo 'nfdstat_c logfile\nnfd pid: ' > nfdstat.log ; ./getNfdPid.sh >> nfdstat.log  ; ./build/nfdstat_c -p $INTEREST_FILTER -d 1 >> nfdstat.log "
+#  ssh ${!HOST} "cd $CWD ; echo 'nfdstat_c logfile\nnfd pid: ' > nfdstat.log ; ./getNfdPid.sh >> nfdstat.log  ; ./build/nfdstat_c -p $INTEREST_FILTER -d 1 >> nfdstat.log "
+#done
+#
+## start nfdstat_s on WU host
+#echo "start nfdstat_s"
+#ssh $h9x2 "cd $CWD ; echo 'nfdstat_s logfile' > nfdstatserver.log ; ./build/nfdstat_s -f linksList.6RTRs -n 12 >> nfdstatserver.log"
 
