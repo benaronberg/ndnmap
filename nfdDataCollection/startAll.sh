@@ -1,5 +1,9 @@
 #!/bin/bash
 
+#TO DO
+#get nfd-start working (can't obtain sudo privelages)
+#will probably need a script to nfdc register each connection (is there a better way? ask haowei)
+
 CWD=`pwd`
 
 source ~/.topology
@@ -49,6 +53,9 @@ done
 
 # start nfdstat_c on all machines
 echo "start nfdstat_c on all machines"
+
+INTEREST_FILTER=$1
+echo "INTEREST_FILTER: $INTEREST_FILTER"
 for s in "${ROUTER_HOST_PAIRS[@]}" 
 do
   pair_info=(${s//:/ })
