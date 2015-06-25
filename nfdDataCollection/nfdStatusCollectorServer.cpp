@@ -202,8 +202,8 @@ public:
     
     try
     {
-      std::cout << m_programName <<  "polling every " << m_pollPeriod << " seconds" << std::endl;
-      std::cout << m_programName <<  "timeout set to  " << m_timeoutPeriod << " milliseconds" << std::endl;
+      std::cout << m_programName <<  " polling every " << m_pollPeriod << " seconds" << std::endl;
+      std::cout << m_programName <<  " timeout set to  " << m_timeoutPeriod << " milliseconds" << std::endl;
       
       m_io.run();
     }

@@ -147,7 +147,14 @@ public:
       }
     }
   }
-  
+
+  const uint64_t &
+  getNfdPid() const
+  {
+    if (DEBUG) std::cout << "PID: " << ::getPid() <<endl;
+    return ::getPid();
+  }  
+
   const uint64_t &
   getTx() const
   {
