@@ -21,6 +21,7 @@
 
 int DEBUG = 0;
 int LOCAL = 0;
+
 namespace ndn {
   
 class NdnMapServer
@@ -45,7 +46,7 @@ public:
   {
     std::cout << "\n Usage:\n " << m_programName <<
     ""
-    "[-h] -f link_file -n number_of_linkids [-s map_addr] [-t poll_period] [-r timeout_period] [-d debug_mode]\n"
+    "[-h] -f link_file -n number_of_linkids [-s map_addr] [-t poll_period] [-r timeout_period] [-d debug_mode] [-l store locally]\n"
     " Poll the status of remote clients and update ndnmap website with the status of the links."
     "\n"
     " The clients to pull from are specified in the input file, as well as their requested links "
@@ -66,7 +67,8 @@ public:
     "\n"
     "  -r timeout_period \t- in milliseconds, default is 500 ms"
     "\n"
-    "  -d debug mode \t-  1 set debug on, 0 set debug off (default)\n" << std::endl;
+    "  -d debug mode \t- 1 set debug on, 0 set debug off (default)"   "\n" 
+    "  -l store locally \t- keep most recent link status in nfdstat.log\n" << std::endl;
     exit(1);
   }
 
@@ -85,16 +87,19 @@ public:
 
     // store server data locally
     if(LOCAL) {
-      //store CollectorData reply in a file called nfdstat.log in cwd
-      ifstream logfile;
-      logfile.open( "nfdstat.log", ios::app);
+      std::ofstream logfile;
+
+      logfile.open( "nfdstat.log", std::ofstream::out);
       if(logfile.is_open()) 
       {
         for (unsigned i=0; i< reply.m_statusList.size(); i++)
         {
-          logfile << "FaceID: " << reply.m_statusList[i].getFaceId() << endl << "LinkIP: " << reply.m_statusList[i].gtLinkIp() << endl << "Tx: " << reply.m_statusList[i].getTx() << endl << "Rx: " << reply.m_statusList[i].getRx() << endl << "Timestamp: " << reply.m_statusList[i].getTimestamp() << endl << endl;
+          logfile << "FaceID: " << reply.m_statusList[i].getFaceId() << std::endl << "LinkIP: " << reply.m_statusList[i].getLinkIp() << std::endl << "Tx: " << reply.m_statusList[i].getTx() << std::endl << "Rx: " << reply.m_statusList[i].getRx() << std::endl << "Timestamp: " << reply.m_statusList[i].getTimestamp() << std::endl << std::endl;
         }
+      } else if(logfile==NULL) {
+	std::cout << "Error opening logfile for write" << std::endl;
       }
+    logfile.close();
     }
     
     // get the list of the remote links requested for this prefix
@@ -275,7 +280,7 @@ main(int argc, char* argv[])
   int option;
   std::fstream file;
   int num_lines = 0;
-  
+   
   // Parse cmd-line arguments
   while ((option = getopt(argc, argv, "hn:f:s:t:r:d:l")) != -1)
   {
@@ -305,8 +310,7 @@ main(int argc, char* argv[])
         DEBUG = atoi(optarg);
         break;
       case 'l':
-        LOCAL = atoi(optarg);
-        std::cout << "LOCAL: " << LOCAL;
+        LOCAL = 1;
         break;
       default:
       case 'h':
