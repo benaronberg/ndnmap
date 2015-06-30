@@ -20,6 +20,7 @@
 #define APP_SUFFIX "/ndnmap/stats"
 
 int DEBUG = 0;
+int LOCAL = 0;
 namespace ndn {
   
 class NdnMapServer
@@ -80,6 +81,20 @@ public:
     if(reply.m_statusList.empty())
     {
       std::cerr << "received data is empty!!" << std::endl;
+    }
+
+    // store server data locally
+    if(LOCAL) {
+      //store CollectorData reply in a file called nfdstat.log in cwd
+      ifstream logfile;
+      logfile.open( "nfdstat.log", ios::app);
+      if(logfile.is_open()) 
+      {
+        for (unsigned i=0; i< reply.m_statusList.size(); i++)
+        {
+          logfile << "FaceID: " << reply.m_statusList[i].getFaceId() << endl << "LinkIP: " << reply.m_statusList[i].gtLinkIp() << endl << "Tx: " << reply.m_statusList[i].getTx() << endl << "Rx: " << reply.m_statusList[i].getRx() << endl << "Timestamp: " << reply.m_statusList[i].getTimestamp() << endl << endl;
+        }
+      }
     }
     
     // get the list of the remote links requested for this prefix
@@ -262,7 +277,7 @@ main(int argc, char* argv[])
   int num_lines = 0;
   
   // Parse cmd-line arguments
-  while ((option = getopt(argc, argv, "hn:f:s:t:r:d:")) != -1)
+  while ((option = getopt(argc, argv, "hn:f:s:t:r:d:l")) != -1)
   {
     switch (option)
     {
@@ -288,6 +303,10 @@ main(int argc, char* argv[])
         break;
       case 'd':
         DEBUG = atoi(optarg);
+        break;
+      case 'l':
+        LOCAL = atoi(optarg);
+        std::cout << "LOCAL: " << LOCAL;
         break;
       default:
       case 'h':
