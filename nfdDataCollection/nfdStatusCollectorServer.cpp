@@ -22,6 +22,7 @@
 
 int DEBUG = 0;
 int LOCAL = 0;
+int GET_PID = 0;
 
 namespace ndn {
   
@@ -95,6 +96,7 @@ public:
         name.append(dstIp);
       }
       ndn::Interest i(name);
+      if(DEBUG) std::cout << "SENT INTEREST FROM getPid(): " << name << std::endl;
       i.setInterestLifetime(ndn::time::milliseconds(m_timeoutPeriod));
       i.setMustBeFresh(true);
       
@@ -352,7 +354,7 @@ main(int argc, char* argv[])
         LOCAL = 1;
 				break;
 			case 'p':
-				ndnmapServer.getPid();
+				GET_PID = 1;
         break;
       default:
       case 'h':
@@ -367,7 +369,7 @@ main(int argc, char* argv[])
   }
   // read link pairs from input file
   if(DEBUG)
-    std::cout << "Rear from input file" << std::endl;
+    std::cout << "Read from input file" << std::endl;
 
   for(int i = 0; i < num_lines; ++i)
   {
@@ -403,6 +405,7 @@ main(int argc, char* argv[])
   }
   file.close();
   
+  if (GET_PID) ndnmapServer.getPid();
   ndnmapServer.startScheduling();
   ndnmapServer.run();
   
