@@ -5,6 +5,7 @@
  */
 
 #include <boost/asio.hpp>
+//#include <boost/filesytem.hpp>
 #include <ndn-cxx/face.hpp>
 #include <ndn-cxx/management/nfd-face-status.hpp>
 #include <ndn-cxx/encoding/buffer-stream.hpp>
@@ -13,6 +14,7 @@
 #include "nfdStatusCollector.hpp"
 
 #define APP_SUFFIX "/ndnmap/stats"
+#define PID_SUFFIX "/nfdpid"
 
 // global variable to support debug
 int DEBUG = 0;
@@ -174,9 +176,20 @@ namespace ndn {
     onInterest(const ndn::Name& name, const ndn::Interest& interest)
     {
       ndn::Name interestName(interest.getName());
-      
+
       if(DEBUG)
         std::cout << "received interest: " << interest.getName() << std::endl;
+
+      //check if interest is nfdpid request
+//      if(!std::strcmp(interest.getName(),getFilter()+PID_SUFFIX))
+      ndn::Name cmpName(getFilter()+PID_SUFFIX);
+      if(!(interest.getName()).compare(cmpName))
+      {
+        std::string pid;
+        pid = getPid();
+        std::cout << "GOT PID HERE" << std::endl;
+        //send pid data packet to server
+      }
       
       int numberOfComponents = interestName.size();
       if(!m_remoteLinks.empty())
@@ -236,6 +249,29 @@ namespace ndn {
     {
       return m_prefixFilter;
     }
+
+    std::string
+    getPid()
+    {
+      std::string result;
+      FILE* pipe;
+      char* cmd = "./getNfdPid";
+      char buffer[32];
+//      system("/bin/bash -c ./getNfdPid.sh");
+      pipe = popen(cmd, "r");
+      if (!pipe) std::cout << "Unable to retrieve pid" << std::endl;
+      result = "";
+      while(!feof(pipe)) {
+    	  if(fgets(buffer, 32, pipe) != NULL)
+    		  result += buffer;
+      }
+      pclose(pipe);
+      std::string pid(buffer);
+        if(DEBUG) std::cout <<  "Got pid: " << pid << std::endl;  
+      return pid;  
+    }
+
+
   private:
 //    boost::asio::io_service ioService;
     std::string m_programName;
