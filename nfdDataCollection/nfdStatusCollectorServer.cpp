@@ -18,6 +18,7 @@
 
 
 #define APP_SUFFIX "/ndnmap/stats"
+#define PID_SUFFIX "/nfdpid"
 
 int DEBUG = 0;
 int LOCAL = 0;
@@ -46,7 +47,7 @@ public:
   {
     std::cout << "\n Usage:\n " << m_programName <<
     ""
-    "[-h] -f link_file -n number_of_linkids [-s map_addr] [-t poll_period] [-r timeout_period] [-d debug_mode] [-l store locally]\n"
+    "[-h] -f link_file -n number_of_linkids [-s map_addr] [-t poll_period] [-r timeout_period] [-d debug_mode] [-l store locally] [-p get PIDs]\n"
     " Poll the status of remote clients and update ndnmap website with the status of the links."
     "\n"
     " The clients to pull from are specified in the input file, as well as their requested links "
@@ -68,9 +69,47 @@ public:
     "  -r timeout_period \t- in milliseconds, default is 500 ms"
     "\n"
     "  -d debug mode \t- 1 set debug on, 0 set debug off (default)"   "\n" 
-    "  -l store locally \t- keep most recent link status in nfdstat.log\n" << std::endl;
+    "  -l store locally \t- keep most recent link status in nfdstat.log\n"
+    "  -p get PID's\t\t- pull PIDs of NFD from each client\n" << std::endl;
     exit(1);
   }
+
+
+
+
+	//** send interests to each client requesting NFD pid, store in pid.log
+  void
+	getPid()
+	{
+    if(DEBUG) std::cout << "Getting PIDs" << std::endl;
+
+    for(auto it = m_linksList.begin(); it != m_linksList.end(); ++it)
+    {
+      std::list<linkPair> linkList = it->second;
+      ndn::Name name(it->first+PID_SUFFIX);
+      
+      std::list<linkPair>::iterator itList;
+      for (itList=linkList.begin(); itList!=linkList.end(); ++itList)
+      {
+        ndn::Name::Component dstIp((*itList).linkIp);
+        name.append(dstIp);
+      }
+      ndn::Interest i(name);
+      i.setInterestLifetime(ndn::time::milliseconds(m_timeoutPeriod));
+      i.setMustBeFresh(true);
+      
+      m_face.expressInterest(i,
+                             bind(&NdnMapServer::onData, this, _1, _2, it->first),
+                             bind(&NdnMapServer::onTimeout, this, _1)); 
+
+      m_face.processEvents();
+//    recieve and store PIDs   
+    }
+	}
+
+
+
+
 
   void
   onData(const ndn::Interest& interest, ndn::Data& data, std::string linkPrefix)
@@ -85,7 +124,7 @@ public:
       std::cerr << "received data is empty!!" << std::endl;
     }
 
-    // store server data locally
+    //** store server data locally
     if(LOCAL) {
       std::ofstream logfile;
 
@@ -282,7 +321,7 @@ main(int argc, char* argv[])
   int num_lines = 0;
    
   // Parse cmd-line arguments
-  while ((option = getopt(argc, argv, "hn:f:s:t:r:d:l")) != -1)
+  while ((option = getopt(argc, argv, "hn:f:s:t:r:d:lp")) != -1)
   {
     switch (option)
     {
@@ -311,6 +350,9 @@ main(int argc, char* argv[])
         break;
       case 'l':
         LOCAL = 1;
+				break;
+			case 'p':
+				ndnmapServer.getPid();
         break;
       default:
       case 'h':
