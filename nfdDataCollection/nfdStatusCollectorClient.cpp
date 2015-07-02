@@ -259,7 +259,7 @@ namespace ndn {
       char buffer[32];
 //      system("/bin/bash -c ./getNfdPid.sh");
       pipe = popen(cmd, "r");
-      if (!pipe) std::cout << "Unable to retrieve pid" << std::endl;
+      if (!pipe) std::cout << "Unable to run getNfdPid.sh - is the script in the nfdDataCollection directory?" << std::endl;
       result = "";
       while(!feof(pipe)) {
     	  if(fgets(buffer, 32, pipe) != NULL)

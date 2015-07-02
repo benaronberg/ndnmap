@@ -104,7 +104,7 @@ public:
                              bind(&NdnMapServer::onData, this, _1, _2, it->first),
                              bind(&NdnMapServer::onTimeout, this, _1)); 
 
-      m_face.processEvents();
+//      m_face.processEvents();
 //    recieve and store PIDs   
     }
 	}
