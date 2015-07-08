@@ -15,7 +15,7 @@
 #include <ndn-cxx/util/scheduler-scoped-event-id.hpp>
 #include <ndn-cxx/util/network-monitor.hpp>
 #include <sys/wait.h>
-
+#include <time.h>
 
 #define APP_SUFFIX "/ndnmap/stats"
 #define PID_SUFFIX "/nfdpid"
@@ -80,8 +80,8 @@ public:
 
 	//** send interests to each client requesting NFD pid, store in pid.log
   void
-	getPid()
-	{
+  getPid()
+  {
     if(DEBUG) std::cout << "Getting PIDs" << std::endl;
 
     for(auto it = m_linksList.begin(); it != m_linksList.end(); ++it)
@@ -107,7 +107,7 @@ public:
 //      m_face.processEvents();
 //    recieve and store PIDs   
     }
-	}
+  }
 
 
 
@@ -130,15 +130,15 @@ public:
     if(LOCAL) {
       std::ofstream logfile;
 
-      logfile.open( "nfdstat.log", std::ofstream::out);
+      logfile.open( "nfdstat_"+getTime()+".log", std::ofstream::app);
       if(logfile.is_open()) 
       {
         for (unsigned i=0; i< reply.m_statusList.size(); i++)
         {
-          logfile << "FaceID: " << reply.m_statusList[i].getFaceId() << std::endl << "LinkIP: " << reply.m_statusList[i].getLinkIp() << std::endl << "Tx: " << reply.m_statusList[i].getTx() << std::endl << "Rx: " << reply.m_statusList[i].getRx() << std::endl << "Timestamp: " << reply.m_statusList[i].getTimestamp() << std::endl << std::endl;
+          logfile << "Client " << i << std::endl << "FaceID: " << reply.m_statusList[i].getFaceId() << std::endl << "LinkIP: " << reply.m_statusList[i].getLinkIp() << std::endl << "Tx: " << reply.m_statusList[i].getTx() << std::endl << "Rx: " << reply.m_statusList[i].getRx() << std::endl << "Timestamp: " << reply.m_statusList[i].getTimestamp() << std::endl << std::endl;
         }
       } else if(logfile==NULL) {
-	std::cout << "Error opening logfile for write" << std::endl;
+	std::cerr << "Error opening logfile for write" << std::endl;
       }
     logfile.close();
     }
@@ -275,6 +275,27 @@ public:
     }
     
   }
+
+  std::string
+  getTime()
+  {
+    return m_time;
+  }
+
+  void
+  setTime()
+  {
+    time_t now;
+    struct tm tstruct;
+    char buf[80];
+
+    std::time(&now);
+    tstruct = *localtime(&now);
+    strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
+    m_time = buf;
+    std::cout << "TIME: " << m_time << std::endl;
+  }
+
   void
   setMapServerAddr(std::string & addr)
   {
@@ -311,7 +332,8 @@ private:
   int m_pollPeriod;
   int m_timeoutPeriod;
   std::string m_mapServerAddr;
-  
+  std::string m_time;
+
 };
 }
 int
@@ -352,9 +374,10 @@ main(int argc, char* argv[])
         break;
       case 'l':
         LOCAL = 1;
-				break;
-			case 'p':
-				GET_PID = 1;
+        ndnmapServer.setTime(); //set time for log file name
+	break;
+      case 'p':
+	GET_PID = 1;
         break;
       default:
       case 'h':
