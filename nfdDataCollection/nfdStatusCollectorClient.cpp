@@ -52,6 +52,8 @@ namespace ndn {
     void
     afterFetchedFaceStatusInformation(const shared_ptr<OBufferStream>& buffer, const Name& remoteName)
     {
+      if(DEBUG) std::cout << "entered afterFetchedFaceStatusInformation" << std::endl;
+
       ConstBufferPtr buf = buffer->buf();
       
       Block block;
@@ -78,8 +80,11 @@ namespace ndn {
 //      }
       currentTime =  realEpochTime.str();
 
+if(DEBUG) std::cout << "Entering while loop on line " <<  __LINE__ << std::endl;
+
       while (offset < buf->size())
       {
+if(DEBUG) std::cout << "IN WHILE LOOP" << std::endl;
         bool ok = Block::fromBuffer(buf, offset, block);
         if (!ok)
         {
@@ -93,29 +98,34 @@ namespace ndn {
         
         // take only udp4 and tcp4 faces at the moment
         std::string remoteUri = faceStatus.getRemoteUri();
-        
         if(remoteUri.compare(0,4,"tcp4") != 0 &&
            remoteUri.compare(0,4,"udp4") != 0)
           continue;
-        
+
         // take the ip from uri (remove tcp4:// and everything after ':'
         std::size_t strPos = remoteUri.find_last_of(":");
         std::string remoteIp = remoteUri.substr(7,strPos - 7);
         
         std::unordered_set<std::string>::const_iterator got = m_remoteLinks.find(remoteIp);
-        
+if(DEBUG) std::cout << "remoteIP: " << remoteIp << std::endl;        
         // the link is not requested by the server
-        if(got == m_remoteLinks.end())
-          continue;
-        
+//       if(got == m_remoteLinks.end())
+//          continue;
+
+if(DEBUG) std::cout << "up to line " << __LINE__ << std::endl;        
+if(DEBUG) std::cout << "Getting link status info" << std::endl;        
+
         FaceStatus linkStatus;
         linkStatus.setTx(faceStatus.getNOutBytes());
         linkStatus.setRx(faceStatus.getNInBytes());
         linkStatus.setFaceId(faceStatus.getFaceId());
         linkStatus.setLinkIp(remoteIp);
         linkStatus.setTimestamp(currentTime);
+
+if(DEBUG) std::cout << "Link status info: " << std::endl << "Tx: " << linkStatus.getTx() << "  Rx: " << linkStatus.getRx() << "  LinkIP: " << linkStatus.getLinkIp() << "  FaceID: " << linkStatus.getFaceId() << std::endl; 
         
         // remove the remoteIP from the list of links to search and add it to the data packet
+if(DEBUG) std::cout << "Now adding content to packet" << std::endl;
         m_remoteLinks.erase(remoteIp);
         content.add(linkStatus);
         
