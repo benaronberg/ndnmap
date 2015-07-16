@@ -109,8 +109,8 @@ if(DEBUG) std::cout << "IN WHILE LOOP" << std::endl;
         std::unordered_set<std::string>::const_iterator got = m_remoteLinks.find(remoteIp);
 if(DEBUG) std::cout << "remoteIP: " << remoteIp << std::endl;        
         // the link is not requested by the server
-//       if(got == m_remoteLinks.end())
-//          continue;
+       if(got == m_remoteLinks.end())
+          continue;
 
 if(DEBUG) std::cout << "up to line " << __LINE__ << std::endl;        
 if(DEBUG) std::cout << "Getting link status info" << std::endl;        
