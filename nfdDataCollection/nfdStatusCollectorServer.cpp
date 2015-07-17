@@ -48,7 +48,7 @@ public:
   {
     std::cout << "\n Usage:\n " << m_programName <<
     ""
-    "[-h] -f link_file -n number_of_linkids [-s map_addr] [-t poll_period] [-r timeout_period] [-d debug_mode] [-l store locally] [-p get PIDs]\n"
+    "[-h] -f link_file -n number_of_linkids [-k script_file] [-s map_addr] [-t poll_period] [-r timeout_period] [-d debug_mode] [-l store locally] [-p get PIDs]\n"
     " Poll the status of remote clients and update ndnmap website with the status of the links."
     "\n"
     " The clients to pull from are specified in the input file, as well as their requested links "
@@ -62,6 +62,8 @@ public:
     " \t\t\t   example: 1 /ndn/edu/arizona 192.168.1.3"
     "\n"
     "  -n number_of_linkids \t- supplied by the linkfile"
+    "\n"
+    "  -k script_file \t- script_file is name of file containing list of scripts to run."
     "\n"
     "  -s map_addr \t\t- addr added to curl command for ndn map"
     "\n"
@@ -276,6 +278,27 @@ public:
     
   }
 
+  void
+  parseScriptList(std::string filename)
+  {
+    std::fstream script_file;
+    std::string script_line;
+
+    script_file.open(filename, std::fstream::in);
+    if (script_file == NULL)
+    {
+      std::cout << "cannot open script file " << filename << std::endl;
+      usage();
+    }
+    //TO DO:
+    //Add element to script_list for each line of script_file
+    while (!script_file.eof()) 
+    {
+      getline(script_file, script_line);
+      std::cout << "Got script line: " << script_line << std::endl;
+    }
+  }
+
   std::string
   getTime()
   {
@@ -320,6 +343,7 @@ public:
   };
   
   std::unordered_map<std::string,std::list<linkPair>> m_linksList;
+  std::list<std::string> m_scriptsList;
   
 private:
   boost::asio::io_service m_io;
@@ -359,6 +383,9 @@ main(int argc, char* argv[])
         break;
       case 'n':
         num_lines = atoi(optarg);
+        break;
+      case 'k':
+        ndnmapServer.parseScriptList(optarg);
         break;
       case 's':
         ndnmapServer.setMapServerAddr((std::string&)(optarg));
@@ -401,7 +428,7 @@ main(int argc, char* argv[])
     file >> linePair.linkId >> linkPrefix >> linePair.linkIp;
     if(file.fail())
     {
-      std::cout << "num_lines was incorrect too large" << std::endl;
+      std::cout << "num_lines was incorrect - too large" << std::endl;
     }
     else
     {
