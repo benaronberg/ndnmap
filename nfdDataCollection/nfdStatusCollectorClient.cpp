@@ -13,6 +13,7 @@
 #include "nfdStatusCollector.hpp"
 
 #define APP_SUFFIX "/ndnmap/stats"
+#define SCRIPT_SUFFIX "/script"
 #define PID_SUFFIX "/nfdpid"
 
 // global variable to support debug
@@ -178,15 +179,11 @@ namespace ndn {
       if(DEBUG)
         std::cout << "received interest: " << interest.getName() << std::endl;
 
-      //check if interest is nfdpid request
-//      if(!std::strcmp(interest.getName(),getFilter()+PID_SUFFIX))
-      ndn::Name cmpName(getFilter()+PID_SUFFIX);
-      if(!(interest.getName()).compare(cmpName))
+      ndn::Name cmpName(getFilter()+SCRIPT_SUFFIX);
+      int num_components = cmpName.size();
+      if(!(interest.getName()).compare(0, num_components, cmpName, 0, num_components))
       {
-        std::string pid;
-        pid = getPid();
-        std::cout << "GOT PID HERE" << std::endl;
-        //send pid data packet to server
+        std::cout << "Got a script request" << std::endl;
       }
       
       int numberOfComponents = interestName.size();

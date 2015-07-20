@@ -250,16 +250,17 @@ public:
           ndn::Name::Component a_script(*iter);
           if (!a_script.empty())
             scripts.append(a_script);
-        }
+        //}
 
         ndn::Interest j(scripts);
         j.setInterestLifetime(ndn::time::milliseconds(m_timeoutPeriod));
         j.setMustBeFresh(true);
 
         m_face.expressInterest(j,
-                                bind(&NdnMapServer::onData, this, _1, _2, it->first),
+                                bind(&NdnMapServer::onData, this, _1, _2, *iter),
                                 bind(&NdnMapServer::onTimeout, this, _1));
         if(DEBUG) std::cout << "SENT: " << scripts << std::endl;
+        }
       //m_face.processEvents(ndn::time::milliseconds(m_timeoutPeriod));
       }
     }
