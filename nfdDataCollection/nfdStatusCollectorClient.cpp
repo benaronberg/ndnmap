@@ -162,6 +162,8 @@ namespace ndn {
       Interest interest("/localhost/nfd/faces/list");
       interest.setChildSelector(0);
       interest.setMustBeFresh(true);
+
+      if(DEBUG) std::cout << "In fetchFaceStatusInformation for " << remoteInterestName << std::endl;
       
       m_face.expressInterest(interest,
                              bind(&NdnMapClient::fetchSegments, this, _2, buffer, remoteInterestName,
@@ -184,21 +186,26 @@ namespace ndn {
       if(!(interest.getName()).compare(0, num_components, cmpName, 0, num_components))
       {
         std::cout << "Got a script request" << std::endl;
-      }
-      
-      int numberOfComponents = interestName.size();
-      if(!m_remoteLinks.empty())
-      {
-        std::cerr << "remote links list is not empty - check for a missing reports!!" << std::endl;
-        m_remoteLinks.clear();
-      }
-      for(int i = name.size(); i < numberOfComponents; ++i)
-      {
-        m_remoteLinks.insert(interestName[i].toUri());
-      }
+        //run scripts and send response
 
-      // ask for local status
-      fetchFaceStatusInformation(interestName);
+      } else {
+        int numberOfComponents = interestName.size();
+        if(!m_remoteLinks.empty())
+        {
+          std::cerr << "remote links list is not empty - check for a missing reports!!" << std::endl;
+          m_remoteLinks.clear();
+        }
+        std::cout << "HERE" << std::endl;
+        for(int i = name.size(); i < numberOfComponents; ++i)
+        {
+          if(DEBUG) std::cout << "Inserting link to m_remoteLinks : " << interestName[i].toUri() << std::endl;
+          m_remoteLinks.insert(interestName[i].toUri());
+        }
+
+        // ask for local status
+        if(DEBUG) std::cout << "Fetching face status info for " << interestName << std::endl;
+        fetchFaceStatusInformation(interestName);
+      }
     }
     void
     onRegisterFailed(const ndn::Name& prefix, const std::string& reason)
