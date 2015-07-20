@@ -18,6 +18,7 @@
 #include <time.h>
 
 #define APP_SUFFIX "/ndnmap/stats"
+#define SCRIPT_SUFFIX "/script"
 #define PID_SUFFIX "/nfdpid"
 
 int DEBUG = 0;
@@ -111,10 +112,6 @@ public:
     }
   }
 
-
-
-
-
   void
   onData(const ndn::Interest& interest, ndn::Data& data, std::string linkPrefix)
   {
@@ -129,7 +126,8 @@ public:
     }
 
     //** store server data locally
-    if(LOCAL) {
+    if(LOCAL) 
+    {
       std::ofstream logfile;
 
       logfile.open( "nfdstat_"+getTime()+".log", std::ofstream::app);
@@ -137,12 +135,14 @@ public:
       {
         for (unsigned i=0; i< reply.m_statusList.size(); i++)
         {
-          logfile << "Client " << i << std::endl << "FaceID: " << reply.m_statusList[i].getFaceId() << std::endl << "LinkIP: " << reply.m_statusList[i].getLinkIp() << std::endl << "Tx: " << reply.m_statusList[i].getTx() << std::endl << "Rx: " << reply.m_statusList[i].getRx() << std::endl << "Timestamp: " << reply.m_statusList[i].getTimestamp() << std::endl << std::endl;
+          logfile << "---LinkId " << i << std::endl << "FaceID: " << reply.m_statusList[i].getFaceId() << std::endl << "LinkIP: " << reply.m_statusList[i].getLinkIp() << std::endl << "Tx: " << reply.m_statusList[i].getTx() << std::endl << "Rx: " << reply.m_statusList[i].getRx() << std::endl << "Timestamp: " << reply.m_statusList[i].getTimestamp() << std::endl << std::endl;
         }
-      } else if(logfile==NULL) {
-	std::cerr << "Error opening logfile for write" << std::endl;
+      } 
+      else if(logfile==NULL) 
+      {
+        std::cerr << "Error opening logfile for write" << std::endl;
       }
-    logfile.close();
+      logfile.close();
     }
     
     // get the list of the remote links requested for this prefix
@@ -172,7 +172,7 @@ public:
             LinkId = (*pair).linkId;
           }
         }
-        
+    /*    
         std::string cmdStr("http://");
         cmdStr += m_mapServerAddr;
         cmdStr += "/bw/";
@@ -197,7 +197,7 @@ public:
         }
         // check for zombies again
         waitpid(-1, &status, WNOHANG);
-        
+    */    
       }
       reply.m_statusList.clear();
     }
@@ -236,7 +236,23 @@ public:
       m_face.expressInterest(i,
                              bind(&NdnMapServer::onData, this, _1, _2, it->first),
                              bind(&NdnMapServer::onTimeout, this, _1));
-      
+//TO DO:
+//Create a single interest with script names, ie (/ndn/.../script1/script2/...)
+      ndn::Name scripts(it->first+SCRIPT_SUFFIX);
+      for(auto iter = m_scriptsList.begin(); iter != m_scriptsList.end(); ++iter) 
+      {
+       //ndn::Name scripts(it->first+APP_SUFFIX);
+        ndn::Name::Component a_script(*iter);
+        scripts.append(a_script);
+      }
+      ndn::Interest j(scripts);
+      j.setInterestLifetime(ndn::time::milliseconds(m_timeoutPeriod));
+      j.setMustBeFresh(true);
+
+      m_face.expressInterest(j,
+                              bind(&NdnMapServer::onData, this, _1, _2, it->first),
+                              bind(&NdnMapServer::onTimeout, this, _1));
+      if(DEBUG) std::cout << "SENT: " << scripts << std::endl;
       //m_face.processEvents(ndn::time::milliseconds(m_timeoutPeriod));
       if(DEBUG)
         std::cout << "sent: " << name << std::endl;
@@ -290,12 +306,12 @@ public:
       std::cout << "cannot open script file " << filename << std::endl;
       usage();
     }
-    //TO DO:
-    //Add element to script_list for each line of script_file
+
     while (!script_file.eof()) 
     {
       getline(script_file, script_line);
-      std::cout << "Got script line: " << script_line << std::endl;
+        if(DEBUG) std::cout << "Got script line: " << script_line << std::endl;
+      m_scriptsList.push_back(script_line);
     }
   }
 
@@ -369,7 +385,7 @@ main(int argc, char* argv[])
   int num_lines = 0;
    
   // Parse cmd-line arguments
-  while ((option = getopt(argc, argv, "hn:f:s:t:r:d:lp")) != -1)
+  while ((option = getopt(argc, argv, "hn:f:s:t:r:d:lpk:")) != -1)
   {
     switch (option)
     {
