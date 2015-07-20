@@ -236,26 +236,32 @@ public:
       m_face.expressInterest(i,
                              bind(&NdnMapServer::onData, this, _1, _2, it->first),
                              bind(&NdnMapServer::onTimeout, this, _1));
+
+      if(DEBUG)
+          std::cout << "sent: " << name << std::endl;
 //TO DO:
 //Create a single interest with script names, ie (/ndn/.../script1/script2/...)
-      ndn::Name scripts(it->first+SCRIPT_SUFFIX);
-      for(auto iter = m_scriptsList.begin(); iter != m_scriptsList.end(); ++iter) 
+      if(!m_scriptsList.empty())
       {
-       //ndn::Name scripts(it->first+APP_SUFFIX);
-        ndn::Name::Component a_script(*iter);
-        scripts.append(a_script);
-      }
-      ndn::Interest j(scripts);
-      j.setInterestLifetime(ndn::time::milliseconds(m_timeoutPeriod));
-      j.setMustBeFresh(true);
+        ndn::Name scripts(it->first+SCRIPT_SUFFIX);
+        for(auto iter = m_scriptsList.begin(); iter != m_scriptsList.end(); ++iter) 
+        {
+        //ndn::Name scripts(it->first+APP_SUFFIX);
+          ndn::Name::Component a_script(*iter);
+          if (!a_script.empty())
+            scripts.append(a_script);
+        }
 
-      m_face.expressInterest(j,
-                              bind(&NdnMapServer::onData, this, _1, _2, it->first),
-                              bind(&NdnMapServer::onTimeout, this, _1));
-      if(DEBUG) std::cout << "SENT: " << scripts << std::endl;
+        ndn::Interest j(scripts);
+        j.setInterestLifetime(ndn::time::milliseconds(m_timeoutPeriod));
+        j.setMustBeFresh(true);
+
+        m_face.expressInterest(j,
+                                bind(&NdnMapServer::onData, this, _1, _2, it->first),
+                                bind(&NdnMapServer::onTimeout, this, _1));
+        if(DEBUG) std::cout << "SENT: " << scripts << std::endl;
       //m_face.processEvents(ndn::time::milliseconds(m_timeoutPeriod));
-      if(DEBUG)
-        std::cout << "sent: " << name << std::endl;
+      }
     }
     // schedule the next fetch
     m_scheduler.scheduleEvent(time::seconds(m_pollPeriod), bind(&NdnMapServer::sendInterests, this));

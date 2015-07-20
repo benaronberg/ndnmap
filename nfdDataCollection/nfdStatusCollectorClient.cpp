@@ -48,11 +48,10 @@ namespace ndn {
     {
       std::cout << "onTimeout" << std::endl;
     }
+
     void
     afterFetchedFaceStatusInformation(const shared_ptr<OBufferStream>& buffer, const Name& remoteName)
     {
-      if(DEBUG) std::cout << "entered afterFetchedFaceStatusInformation" << std::endl;
-
       ConstBufferPtr buf = buffer->buf();
       
       Block block;
