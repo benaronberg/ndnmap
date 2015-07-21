@@ -195,15 +195,12 @@ namespace ndn {
           std::cerr << "remote links list is not empty - check for a missing reports!!" << std::endl;
           m_remoteLinks.clear();
         }
-        std::cout << "HERE" << std::endl;
         for(int i = name.size(); i < numberOfComponents; ++i)
         {
-          if(DEBUG) std::cout << "Inserting link to m_remoteLinks : " << interestName[i].toUri() << std::endl;
           m_remoteLinks.insert(interestName[i].toUri());
         }
 
         // ask for local status
-        if(DEBUG) std::cout << "Fetching face status info for " << interestName << std::endl;
         fetchFaceStatusInformation(interestName);
       }
     }
