@@ -23,7 +23,6 @@
 
 int DEBUG = 0;
 int LOCAL = 0;
-int GET_PID = 0;
 
 namespace ndn {
   
@@ -73,136 +72,100 @@ public:
     "  -r timeout_period \t- in milliseconds, default is 500 ms"
     "\n"
     "  -d debug mode \t- 1 set debug on, 0 set debug off (default)"   "\n" 
-    "  -l store locally \t- keep most recent link status in nfdstat.log\n"
-    "  -p get PID's\t\t- pull PIDs of NFD from each client\n" << std::endl;
+    "  -l store locally \t- store collected data in log file\n"
+    << std::endl;
     exit(1);
-  }
-
-
-
-
-	//** send interests to each client requesting NFD pid, store in pid.log
-  void
-  getPid()
-  {
-    if(DEBUG) std::cout << "Getting PIDs" << std::endl;
-
-    for(auto it = m_linksList.begin(); it != m_linksList.end(); ++it)
-    {
-      std::list<linkPair> linkList = it->second;
-      ndn::Name name(it->first+PID_SUFFIX);
-      
-      std::list<linkPair>::iterator itList;
-      for (itList=linkList.begin(); itList!=linkList.end(); ++itList)
-      {
-        ndn::Name::Component dstIp((*itList).linkIp);
-        name.append(dstIp);
-      }
-      ndn::Interest i(name);
-      if(DEBUG) std::cout << "SENT INTEREST FROM getPid(): " << name << std::endl;
-      i.setInterestLifetime(ndn::time::milliseconds(m_timeoutPeriod));
-      i.setMustBeFresh(true);
-      
-      m_face.expressInterest(i,
-                             bind(&NdnMapServer::onData, this, _1, _2, it->first),
-                             bind(&NdnMapServer::onTimeout, this, _1)); 
-
-//      m_face.processEvents();
-//    recieve and store PIDs   
-    }
   }
 
   void
   onData(const ndn::Interest& interest, ndn::Data& data, std::string linkPrefix)
   {
     std::cout << "Data received for: " << interest.getName() << std::endl;
-    CollectorData reply;
-    
-    reply.wireDecode(data.getContent().blockFromValue());
-    
-    if(reply.m_statusList.empty())
+    std::cout << "Link prefix is " << linkPrefix << std::endl;  
+
+    CollectorData reply;   
+ 
+    ndn::Name cmpName(linkPrefix+SCRIPT_SUFFIX);
+    if (cmpName.isPrefixOf(interest.getName())) 
     {
-      std::cerr << "received data is empty!!" << std::endl;
+      decodeScriptReply(data);
     }
-
-    //** store server data locally
-    if(LOCAL) 
-    {
-      std::ofstream logfile;
-
-      logfile.open( "nfdstat_"+getTime()+".log", std::ofstream::app);
-      if(logfile.is_open()) 
+    else 
+    {  
+      reply.wireDecode(data.getContent().blockFromValue()); 
+    
+      if(reply.m_statusList.empty())
       {
+        std::cerr << "received data is empty!!" << std::endl;
+      }
+      //** store server data locally
+      if(LOCAL) 
+      {
+        std::ofstream logfile;
+
+        logfile.open( "nfdstat_"+getTime()+".log", std::ofstream::app);
+        if(logfile.is_open()) 
+        {
+          for (unsigned i=0; i< reply.m_statusList.size(); i++)
+          {
+            logfile << "---LinkId " << i << std::endl << "FaceID: " << reply.m_statusList[i].getFaceId() << std::endl << "LinkIP: " << reply.m_statusList[i].getLinkIp() << std::endl << "Tx: " << reply.m_statusList[i].getTx() << std::endl << "Rx: " << reply.m_statusList[i].getRx() << std::endl << "Timestamp: " << reply.m_statusList[i].getTimestamp() << std::endl << std::endl;
+          }
+        } 
+        else if(logfile==NULL) 
+        {
+          std::cerr << "Error opening logfile for write" << std::endl;
+        }
+        logfile.close();
+      }
+    
+      // get the list of the remote links requested for this prefix
+      std::unordered_map<std::string,std::list<ndn::NdnMapServer::linkPair>>::const_iterator got = m_linksList.find(linkPrefix);
+    
+      if(got == m_linksList.end())
+      {
+        std::cerr << "failed to recognize the prefix: " << linkPrefix << std::endl;
+      }
+      else
+      {
+        std::list<ndn::NdnMapServer::linkPair> prefixList = got->second;
+      
         for (unsigned i=0; i< reply.m_statusList.size(); i++)
         {
-          logfile << "---LinkId " << i << std::endl << "FaceID: " << reply.m_statusList[i].getFaceId() << std::endl << "LinkIP: " << reply.m_statusList[i].getLinkIp() << std::endl << "Tx: " << reply.m_statusList[i].getTx() << std::endl << "Rx: " << reply.m_statusList[i].getRx() << std::endl << "Timestamp: " << reply.m_statusList[i].getTimestamp() << std::endl << std::endl;
-        }
-      } 
-      else if(logfile==NULL) 
-      {
-        std::cerr << "Error opening logfile for write" << std::endl;
-      }
-      logfile.close();
-    }
-    
-    // get the list of the remote links requested for this prefix
-    std::unordered_map<std::string,std::list<ndn::NdnMapServer::linkPair>>::const_iterator got = m_linksList.find(linkPrefix);
-    
-    if(got == m_linksList.end())
-    {
-      std::cerr << "failed to recognize the prefix: " << linkPrefix << std::endl;
-    }
-    else
-    {
-      std::list<ndn::NdnMapServer::linkPair> prefixList = got->second;
-      
-      for (unsigned i=0; i< reply.m_statusList.size(); i++)
-      {
-        int LinkId = 0;
-        std::cout << "Reply: " << reply.m_statusList.at(i);
+          int LinkId = 0;
+          std::cout << "Reply: " << reply.m_statusList.at(i);
         
-        // get the link id of the current IP
-        for (auto pair = prefixList.cbegin(); pair != prefixList.cend(); ++pair)
-        {
-          if((*pair).linkIp == reply.m_statusList[i].getLinkIp())
+          // get the link id of the current IP
+          for (auto pair = prefixList.cbegin(); pair != prefixList.cend(); ++pair)
           {
-            if (DEBUG)
-              std::cout << " Link ID for " << linkPrefix << " and " << reply.m_statusList[i].getLinkIp() << " is " << (*pair).linkId << std::endl;
+            if((*pair).linkIp == reply.m_statusList[i].getLinkIp())
+            {
+              if (DEBUG)
+                std::cout << " Link ID for " << linkPrefix << " and " << reply.m_statusList[i].getLinkIp() << " is " << (*pair).linkId << std::endl;
             
-            LinkId = (*pair).linkId;
+              LinkId = (*pair).linkId;
+            }
           }
         }
-    /*    
-        std::string cmdStr("http://");
-        cmdStr += m_mapServerAddr;
-        cmdStr += "/bw/";
-        cmdStr += std::to_string(LinkId);
-        cmdStr += "/" + reply.m_statusList[i].getTimestamp() + "/";
-        cmdStr += std::to_string(reply.m_statusList[i].getTx() * 8) + "/";
-        cmdStr += std::to_string(reply.m_statusList[i].getRx() * 8);
-        
-        if (DEBUG)
-          std::cout << "cmd to pass to curl: " << cmdStr << std::endl;
-        
-        int status;
-        // check for zombies
-        waitpid(-1, &status, WNOHANG);
-        int pid;
-        if ((pid = fork()) < 0)
-          printf("for failed for curl %s\n", cmdStr.c_str());
-        else
-        {
-          if (pid == 0)
-            execl("/usr/bin/curl","curl", "-s", "-L", cmdStr.c_str(), NULL);
-        }
-        // check for zombies again
-        waitpid(-1, &status, WNOHANG);
-    */    
-      }
-      reply.m_statusList.clear();
+        reply.m_statusList.clear();
+      } 
+    } 
+  } 
+ 
+  void
+  decodeScriptReply(ndn::Data& data)
+  { 
+    ndn::Block block;  
+    block = data.getContent(); 
+    std::vector<char> buffer; 
+    int i = 0;
+
+    for (auto it = block.begin(); it != block.end(); it++)
+    {
+      buffer[i] = block[it];
+      ++i;
     }
   }
-  
+ 
   void
   onTimeout(const ndn::Interest& interest)
   {
@@ -239,7 +202,7 @@ public:
 
       if(DEBUG)
           std::cout << "sent: " << name << std::endl;
-//TO DO:
+
 //Create a single interest with script names, ie (/ndn/.../script1/script2/...)
       if(!m_scriptsList.empty())
       {
@@ -248,6 +211,7 @@ public:
         {
         //ndn::Name scripts(it->first+APP_SUFFIX);
           ndn::Name::Component a_script(*iter);
+if(DEBUG) std::cout << "Appending component " << a_script << std::endl;
           if (!a_script.empty())
             scripts.append(a_script);
         }
@@ -267,6 +231,7 @@ public:
     // schedule the next fetch
     m_scheduler.scheduleEvent(time::seconds(m_pollPeriod), bind(&NdnMapServer::sendInterests, this));
   }
+
   void
   terminate(const boost::system::error_code& error, int signalNo)
   {
@@ -277,11 +242,13 @@ public:
     }
     m_io.stop();
   }
+
   void startScheduling()
   {
     // schedule the first event soon
     m_scheduler.scheduleEvent(time::milliseconds(100), bind(&NdnMapServer::sendInterests, this));
   }
+
   void run()
   {
     m_terminationSignalSet.async_wait(bind(&NdnMapServer::terminate, this, _1, _2));
@@ -310,14 +277,13 @@ public:
     script_file.open(filename, std::fstream::in);
     if (script_file == NULL)
     {
-      std::cout << "cannot open script file " << filename << std::endl;
+      std::cerr << "cannot open script file " << filename << std::endl;
       usage();
     }
 
     while (!script_file.eof()) 
     {
-      getline(script_file, script_line);
-        if(DEBUG) std::cout << "Got script line: " << script_line << std::endl;
+      getline(script_file, script_line); 
       m_scriptsList.push_back(script_line);
     }
   }
@@ -383,6 +349,7 @@ private:
 
 };
 }
+
 int
 main(int argc, char* argv[])
 {
@@ -392,7 +359,7 @@ main(int argc, char* argv[])
   int num_lines = 0;
    
   // Parse cmd-line arguments
-  while ((option = getopt(argc, argv, "hn:f:s:t:r:d:lpk:")) != -1)
+  while ((option = getopt(argc, argv, "hn:f:s:t:r:d:lk:")) != -1)
   {
     switch (option)
     {
@@ -407,7 +374,7 @@ main(int argc, char* argv[])
       case 'n':
         num_lines = atoi(optarg);
         break;
-      case 'k':
+      case 'k': 
         ndnmapServer.parseScriptList(optarg);
         break;
       case 's':
@@ -426,9 +393,6 @@ main(int argc, char* argv[])
         LOCAL = 1;
         ndnmapServer.setTime(); //set time for log file name
 	break;
-      case 'p':
-	GET_PID = 1;
-        break;
       default:
       case 'h':
         ndnmapServer.usage();
@@ -477,8 +441,7 @@ main(int argc, char* argv[])
     }
   }
   file.close();
-  
-  if (GET_PID) ndnmapServer.getPid();
+   
   ndnmapServer.startScheduling();
   ndnmapServer.run();
   

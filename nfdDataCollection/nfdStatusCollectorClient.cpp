@@ -14,7 +14,6 @@
 
 #define APP_SUFFIX "/ndnmap/stats"
 #define SCRIPT_SUFFIX "/script"
-#define PID_SUFFIX "/nfdpid"
 
 // global variable to support debug
 int DEBUG = 0;
@@ -40,6 +39,7 @@ namespace ndn {
       " \t-h - print this message and exit\n"
       " \t-p - prefix (of this host) to register as the interest's filter\n"
       " \t-d - sets the debug mode, 1 - debug on, 0 - debug off (default)\n"
+      " \t-b - set size of buffer for storing data collected, useful for \n \t\t  scripts collecting large data sets. Default is 1024 bytes \n"
       "\n";
       exit(1);
     }
@@ -161,9 +161,7 @@ namespace ndn {
       
       Interest interest("/localhost/nfd/faces/list");
       interest.setChildSelector(0);
-      interest.setMustBeFresh(true);
-
-      if(DEBUG) std::cout << "In fetchFaceStatusInformation for " << remoteInterestName << std::endl;
+      interest.setMustBeFresh(true); 
       
       m_face.expressInterest(interest,
                              bind(&NdnMapClient::fetchSegments, this, _2, buffer, remoteInterestName,
@@ -180,14 +178,19 @@ namespace ndn {
 
       if(DEBUG)
         std::cout << "received interest: " << interest.getName() << std::endl;
-
+      
+      //run scripts if requested by server
       ndn::Name cmpName(getFilter()+SCRIPT_SUFFIX);
       int num_components = cmpName.size();
-      if(!(interest.getName()).compare(0, num_components, cmpName, 0, num_components))
+      if(cmpName.isPrefixOf(interestName))
       {
-        std::cout << "Got a script request" << std::endl;
-        //run scripts and send response
-
+        int numberOfComponents = interestName.size();
+	for(int i = num_components; i < numberOfComponents; ++i)
+        { 
+          m_scriptsList.push_front(interestName[i].toUri());
+        }
+        ndn::Block block = runScripts(); 
+        replyWithScriptData(block, interestName);
       } else {
         int numberOfComponents = interestName.size();
         if(!m_remoteLinks.empty())
@@ -196,7 +199,7 @@ namespace ndn {
           m_remoteLinks.clear();
         }
         for(int i = name.size(); i < numberOfComponents; ++i)
-        {
+        { 
           m_remoteLinks.insert(interestName[i].toUri());
         }
 
@@ -204,12 +207,14 @@ namespace ndn {
         fetchFaceStatusInformation(interestName);
       }
     }
+
     void
     onRegisterFailed(const ndn::Name& prefix, const std::string& reason)
     {
       std::cerr << "ERROR: Failed to register prefix (" << reason << ")" << std::endl;
       m_face.shutdown();
     }
+
     void
     registerInterest()
     {
@@ -249,36 +254,68 @@ namespace ndn {
       return m_prefixFilter;
     }
 
-    std::string
-    getPid()
+    void
+    setBufSize(int bufSize)
     {
-      std::string result;
-      FILE* pipe;
-      char* cmd = "./getNfdPid";
-      char buffer[32];
-//      system("/bin/bash -c ./getNfdPid.sh");
-      pipe = popen(cmd, "r");
-      if (!pipe) std::cout << "Unable to run getNfdPid.sh - is the script in the nfdDataCollection directory?" << std::endl;
-      result = "";
-      while(!feof(pipe)) {
-    	  if(fgets(buffer, 32, pipe) != NULL)
-    		  result += buffer;
-      }
-      pclose(pipe);
-      std::string pid(buffer);
-        if(DEBUG) std::cout <<  "Got pid: " << pid << std::endl;  
-      return pid;  
+      BUF_SIZE = bufSize;    
     }
 
+    ndn::Block
+    runScripts()
+    {
+      std::string result, tmpString;
+      std::string prefix = "./";
+      FILE* pipe;
+      const char* cmd; 
+      char buf[BUF_SIZE];
+
+      while (!m_scriptsList.empty())
+      {
+        tmpString = prefix + m_scriptsList.front();
+        cmd = tmpString.c_str();
+        if(DEBUG) std::cout << "running " << cmd << std::endl;
+        pipe = popen(cmd, "r");
+        if (!pipe) std::cerr << "Unable to run " << cmd << " - is the script in the nfdDataCollection directory?" << std::endl;
+        result = "";
+        while(!feof(pipe)) 
+        {
+      	  if(fgets(buf, BUF_SIZE, pipe) != NULL)
+      	    result += buf;
+        }
+        pclose(pipe);
+        m_scriptsList.pop_front();
+        if(DEBUG) std::cout <<  "Got data: " << result << std::endl;
+      }  
+      result.copy(buf, sizeof(result), 0);
+      if(DEBUG) std::cout << "ABOUT TO CONSTRUCT BLOCK" << std::endl << "sizeof(result) = " << sizeof(result) << std::endl;
+      ndn::Block block(buf, BUF_SIZE);
+      if(DEBUG) std::cout << "CONSTRUCTED BLOCK" << std::endl;
+      return block;  
+    }
+   
+    void
+    replyWithScriptData(ndn::Block& block, ndn::Name& interestName)
+    {     
+if(DEBUG) std::cout << "Made it to replyWithScriptData" << std::endl;
+      ndn::shared_ptr<ndn::Data> data = ndn::make_shared<ndn::Data>(interestName);
+      block.encode();
+if(DEBUG) std::cout << "block.hasWire() = " << block.hasWire() << std::endl;
+      data->setContent(block);
+      data->setFreshnessPeriod(time::seconds(0));
+      m_keyChain.sign(*data);
+      m_face.put(*data);  
+    }
 
   private:
 //    boost::asio::io_service ioService;
     std::string m_programName;
     std::string m_prefixFilter;
     std::unordered_set<std::string> m_remoteLinks;
+    std::list<std::string> m_scriptsList;
     int m_pollPeriod;
     Face m_face;
     KeyChain m_keyChain;
+    int BUF_SIZE;
   };
 } // namespace ndn
 
@@ -288,7 +325,9 @@ main(int argc, char* argv[])
   ndn::NdnMapClient ndnmapClient(argv[0]);
   int option;
   
-  while ((option = getopt(argc, argv, "hp:d:")) != -1)
+  ndnmapClient.setBufSize(1024);
+
+  while ((option = getopt(argc, argv, "hp:d:b:")) != -1)
   {
     switch (option)
     {
@@ -304,6 +343,10 @@ main(int argc, char* argv[])
         DEBUG = atoi(optarg);
         break;
         
+      case 'b':
+        ndnmapClient.setBufSize(atoi(optarg));
+        break;
+
       default:
         ndnmapClient.usage();
         break;
