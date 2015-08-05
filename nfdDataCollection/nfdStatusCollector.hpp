@@ -31,6 +31,7 @@ namespace statusCollector
     };
   }
 }
+
 class FaceStatus
 {
 public:
@@ -349,8 +350,6 @@ public:
     size_t bytes_encoded = 0;
 
     bytes_encoded += prependByteArrayBlock(encoder, ndn::statusCollector::tlv::ScriptData, reinterpret_cast<const uint8_t*>(m_data.c_str()), m_data.size());
-
-    std::cout << "Bytes_encoded: " << bytes_encoded << std::endl;
     
     bytes_encoded += encoder.prependVarNumber(bytes_encoded);
     bytes_encoded += encoder.prependVarNumber(statusCollector::tlv::ScriptPacket);

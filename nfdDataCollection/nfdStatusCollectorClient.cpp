@@ -72,11 +72,7 @@ namespace ndn {
       realEpochTime << realEpochSeconds << "." << realEpochMilli;
 
       CollectorData content;
-//      if (DEBUG)
-//      {
-//        std::cout << "'real' currentTime" << currentTimeStr << std::endl;;
-//        std::cout << "real epochTime: " << realEpochTime.str().c_str() << std::endl;
-//      }
+
       currentTime =  realEpochTime.str();
 
       while (offset < buf->size())
@@ -132,6 +128,7 @@ namespace ndn {
         m_face.put(*data);
       }
     }
+
     void
     fetchSegments(const Data& data, const shared_ptr<OBufferStream>& buffer, Name& remoteName,
                   void (NdnMapClient::*onDone)(const shared_ptr<OBufferStream>&, const Name& ))
@@ -154,6 +151,7 @@ namespace ndn {
         return (this->*onDone)(buffer,remoteName);
       }
     }
+
     void
     fetchFaceStatusInformation(Name& remoteInterestName)
     {
@@ -181,18 +179,18 @@ namespace ndn {
       
       //run scripts if requested by server
       ndn::Name cmpName(getFilter()+SCRIPT_SUFFIX);
-std::cout << "cmpName: " << cmpName.toUri() << std::endl;
       int num_components = cmpName.size();
       if(cmpName.isPrefixOf(interestName))
       {
         int numberOfComponents = interestName.size();
-	for(int i = num_components; i < numberOfComponents; ++i)
+	      for(int i = num_components; i < numberOfComponents; ++i)
         {
-std::cout << "pushing to scripts list: " << interestName[i].toUri() << std::endl; 
           m_scriptsList.push_front(interestName[i].toUri());
         }
         runScripts(interestName);
-      } else {
+      } 
+      else 
+      {
         int numberOfComponents = interestName.size();
         if(!m_remoteLinks.empty())
         {
@@ -206,6 +204,49 @@ std::cout << "pushing to scripts list: " << interestName[i].toUri() << std::endl
 
         // ask for local status
         fetchFaceStatusInformation(interestName);
+      }
+    }
+
+    void
+    runScripts(ndn::Name& interestName)
+    {
+      std::string result, tmpString;
+      std::string prefix = "./";
+      FILE* pipe;
+      const char* cmd; 
+      char buf[BUF_SIZE];
+
+      while (!m_scriptsList.empty())
+      {
+        tmpString = prefix + m_scriptsList.front();
+        cmd = tmpString.c_str();
+
+        if(DEBUG) std::cout << "running " << cmd << std::endl;
+        
+        pipe = popen(cmd, "r");
+        if (!pipe) 
+          std::cerr << "Unable to run " << cmd << " - is the script in the nfdDataCollection directory?" << std::endl;
+
+        result = "";
+        while(!feof(pipe)) 
+        {
+          if(fgets(buf, BUF_SIZE, pipe) != NULL)
+            result += buf;
+        }
+        pclose(pipe);
+        m_scriptsList.pop_front();
+
+        if(DEBUG) std::cout <<  "Got data: " << result << std::endl;
+       
+        // generate data packet containing script data
+        ScriptReply script_reply;
+        script_reply.setData(result);
+        ndn::shared_ptr<ndn::Data> data = ndn::make_shared<ndn::Data>(interestName);
+        data->setContent(script_reply.wireEncode());
+        data->setFreshnessPeriod(time::seconds(0));
+
+        m_keyChain.sign(*data);
+        m_face.put(*data);  
       }
     }
 
@@ -260,46 +301,8 @@ std::cout << "pushing to scripts list: " << interestName[i].toUri() << std::endl
     {
       BUF_SIZE = bufSize;    
     }
-
-    void
-    runScripts(ndn::Name& interestName)
-    {
-      std::string result, tmpString;
-      std::string prefix = "./";
-      FILE* pipe;
-      const char* cmd; 
-      char buf[BUF_SIZE];
-
-      while (!m_scriptsList.empty())
-      {
-        tmpString = prefix + m_scriptsList.front();
-        cmd = tmpString.c_str();
-        if(DEBUG) std::cout << "running " << cmd << std::endl;
-        pipe = popen(cmd, "r");
-        if (!pipe) 
-          std::cerr << "Unable to run " << cmd << " - is the script in the nfdDataCollection directory?" << std::endl;
-        result = "";
-        while(!feof(pipe)) 
-        {
-      	  if(fgets(buf, BUF_SIZE, pipe) != NULL)
-      	    result += buf;
-        }
-        pclose(pipe);
-        m_scriptsList.pop_front();
-        if(DEBUG) std::cout <<  "Got data: " << result << std::endl;
-       
-        ScriptReply script_reply;
-        script_reply.setData(result);
-        ndn::shared_ptr<ndn::Data> data = ndn::make_shared<ndn::Data>(interestName);
-        data->setContent(script_reply.wireEncode());
-        data->setFreshnessPeriod(time::seconds(0));
-
-        m_keyChain.sign(*data);
-        m_face.put(*data);  
-      }
-    }
+    
   private:
-//    boost::asio::io_service ioService;
     std::string m_programName;
     std::string m_prefixFilter;
     std::unordered_set<std::string> m_remoteLinks;
@@ -309,7 +312,7 @@ std::cout << "pushing to scripts list: " << interestName[i].toUri() << std::endl
     KeyChain m_keyChain;
     int BUF_SIZE;
   };
-} // namespace ndn
+}
 
 int
 main(int argc, char* argv[])

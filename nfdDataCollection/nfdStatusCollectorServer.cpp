@@ -19,10 +19,10 @@
 
 #define APP_SUFFIX "/ndnmap/stats"
 #define SCRIPT_SUFFIX "/script"
-#define PID_SUFFIX "/nfdpid"
 
 int DEBUG = 0;
 int LOCAL = 0;
+int COLLECTOR = 1;
 
 namespace ndn {
   
@@ -73,6 +73,9 @@ public:
     "\n"
     "  -d debug mode \t- 1 set debug on, 0 set debug off (default)"   "\n" 
     "  -l store locally \t- store collected data in log file\n"
+    "  -i specify target \t- send an interest to a single node (must be used with -y option\n"
+    "  -y specify script \t- run a single script on target node (must be used with -i option\n"
+    "  -x suppress Collector requests\n"
     << std::endl;
     exit(1);
   }
@@ -84,12 +87,13 @@ public:
 
     CollectorData reply;   
  
+    // check if data is from script request
     ndn::Name cmpName(linkPrefix+SCRIPT_SUFFIX);
     if (cmpName.isPrefixOf(interest.getName())) 
     {
       decodeScriptReply(data);
     }
-    else 
+    else // data is a CollectorData reply 
     {  
       reply.wireDecode(data.getContent().blockFromValue()); 
     
@@ -105,10 +109,11 @@ public:
         logfile.open( "nfdstat_"+getTime()+".log", std::ofstream::app);
         if(logfile.is_open()) 
         {
-          for (unsigned i=0; i< reply.m_statusList.size(); i++)
-          {
-            logfile << "---LinkId " << i << std::endl << "FaceID: " << reply.m_statusList[i].getFaceId() << std::endl << "LinkIP: " << reply.m_statusList[i].getLinkIp() << std::endl << "Tx: " << reply.m_statusList[i].getTx() << std::endl << "Rx: " << reply.m_statusList[i].getRx() << std::endl << "Timestamp: " << reply.m_statusList[i].getTimestamp() << std::endl << std::endl;
-          }
+          //for (unsigned i=0; i< reply.m_statusList.size(); i++)
+          //{
+            logfile << reply;
+            //"---LinkId " << i << std::endl << "FaceID: " << reply.m_statusList[i].getFaceId() << std::endl << "LinkIP: " << reply.m_statusList[i].getLinkIp() << std::endl << "Tx: " << reply.m_statusList[i].getTx() << std::endl << "Rx: " << reply.m_statusList[i].getRx() << std::endl << "Timestamp: " << reply.m_statusList[i].getTimestamp() << std::endl << std::endl;
+          //}
         } 
         else if(logfile==NULL) 
         {
@@ -164,34 +169,27 @@ public:
      buffer += reply.getData();
 
      if(LOCAL)
-     {
        storeLocally(buffer); 
-     } else {
+     else 
        std::cout << buffer << std::endl;
-     }
   }
   
   void
   storeLocally(std::string& buffer)
   {
-   std::ofstream logfile;
+    std::ofstream logfile;
 
-   logfile.open( "nfdstat_"+getTime()+".log", std::ofstream::app);
-   if(logfile.is_open())
-   {
-     logfile << buffer; 
-   }
-   else if(logfile==NULL)
-   {
-     std::cerr << "Error opening logfile for write" << std::endl;
-   }
-   logfile.close();
-  }
- 
-  void
-  onTimeout(const ndn::Interest& interest)
-  {
-    std::cout << "onTimeout: " << interest.getName() << std::endl;
+    logfile.open( "nfdstat_"+getTime()+".log", std::ofstream::app);
+    if(logfile.is_open())
+    {
+      logfile << buffer; 
+    }
+    else if(logfile==NULL)
+    {
+      std::cerr << "Error opening logfile for write" << std::endl;
+    }
+   
+    logfile.close();
   }
   
   void
@@ -203,35 +201,42 @@ public:
       auto now_c = std::chrono::system_clock::to_time_t(now);
       std::cout << std::ctime(&now_c) << "about to send interests " <<std::endl;
     }
+    
+    // send specified interests for each link in 'link_file'
     for(auto it = m_linksList.begin(); it != m_linksList.end(); ++it)
     {
-      std::list<linkPair> linkList = it->second;
-      ndn::Name name(it->first+APP_SUFFIX);
-      
-      std::list<linkPair>::iterator itList;
-      for (itList=linkList.begin(); itList!=linkList.end(); ++itList)
+      // request face statuses (unless suppressed with -x option)
+      if (COLLECTOR) 
       {
-        ndn::Name::Component dstIp((*itList).linkIp);
-        name.append(dstIp);
+        std::list<linkPair> linkList = it->second;
+        ndn::Name name(it->first+APP_SUFFIX);
+        
+        std::list<linkPair>::iterator itList;
+        for (itList=linkList.begin(); itList!=linkList.end(); ++itList)
+        {
+          ndn::Name::Component dstIp((*itList).linkIp);
+          name.append(dstIp);
+        }
+        ndn::Interest i(name);
+        i.setInterestLifetime(ndn::time::milliseconds(m_timeoutPeriod));
+        i.setMustBeFresh(true);
+        
+        m_face.expressInterest(i,
+                               bind(&NdnMapServer::onData, this, _1, _2, it->first),
+                               bind(&NdnMapServer::onTimeout, this, _1));
+
+        if(DEBUG)
+            std::cout << "sent: " << name << std::endl;
       }
-      ndn::Interest i(name);
-      i.setInterestLifetime(ndn::time::milliseconds(m_timeoutPeriod));
-      i.setMustBeFresh(true);
-      
-      m_face.expressInterest(i,
-                             bind(&NdnMapServer::onData, this, _1, _2, it->first),
-                             bind(&NdnMapServer::onTimeout, this, _1));
 
-      if(DEBUG)
-          std::cout << "sent: " << name << std::endl;
-
+      // send any requested script interests
       if(!m_scriptsList.empty())
       {
         for(auto iter = m_scriptsList.begin(); iter != m_scriptsList.end(); ++iter) 
         {
           ndn::Name scripts(it->first+SCRIPT_SUFFIX);
           ndn::Name::Component a_script(*iter);
-if(DEBUG) std::cout << "Appending component " << a_script << std::endl;
+
           if (!a_script.empty())
           {
             scripts.append(a_script);
@@ -246,11 +251,17 @@ if(DEBUG) std::cout << "Appending component " << a_script << std::endl;
             if(DEBUG) std::cout << "SENT: " << scripts << std::endl;
           }
         }
-    //  m_face.processEvents(ndn::time::milliseconds(m_timeoutPeriod));
       }
+    
     }
     // schedule the next fetch
     m_scheduler.scheduleEvent(time::seconds(m_pollPeriod), bind(&NdnMapServer::sendInterests, this));
+  }
+
+  void
+  onTimeout(const ndn::Interest& interest)
+  {
+    std::cout << "onTimeout: " << interest.getName() << std::endl;
   }
 
   void
@@ -285,16 +296,9 @@ if(DEBUG) std::cout << "Appending component " << a_script << std::endl;
     {
       std::cerr << "ERROR: " << e.what() << "\n" << std::endl;
       exit(1);
-    }
-    
+    } 
   }
 
-  void
-  processSingleEvent()
-  {
-std::cout << "processing single event" << std::endl;
-    m_face.processEvents(ndn::time::milliseconds(m_timeoutPeriod));
-  }
   void
   parseScriptList(std::string filename)
   {
@@ -318,20 +322,18 @@ std::cout << "processing single event" << std::endl;
   void
   addScript(std::string script)
   {
-std::cout << "added script" << std::endl;
     m_scriptsList.push_back(script);
   }
 
   void
   addScriptTarget(std::string target)
   {
-std::cout << "In addScriptTarget" << std::endl;
     if (!m_linksList.empty())
     {
       std::cout << "-i option cannot be used with -f or -k" << std::endl;
       exit(1); 
     }
-std::cout << "creating link pair" << std::endl;
+    // add prefix requested from command line -i option to linksList
     linkPair link_pair;
 
     link_pair.linkId = 0;
@@ -341,6 +343,12 @@ std::cout << "creating link pair" << std::endl;
     targetList.push_back(link_pair);
     std::pair<std::string,std::list<linkPair>> pair(target,targetList);
     m_linksList.insert(pair);
+  }
+
+  void
+  processSingleEvent()
+  {
+    m_face.processEvents(ndn::time::milliseconds(m_timeoutPeriod));
   }
 
   std::string
@@ -360,7 +368,7 @@ std::cout << "creating link pair" << std::endl;
     tstruct = *localtime(&now);
     strftime(buf, sizeof(buf), "%Y-%m-%d.%X", &tstruct);
     m_time = buf;
-    std::cout << "TIME: " << m_time << std::endl;
+    if(DEBUG) std::cout << "TIME: " << m_time << std::endl;
   }
 
   void
@@ -368,11 +376,13 @@ std::cout << "creating link pair" << std::endl;
   {
     m_mapServerAddr = addr;
   }
+
   void
   setPollPeriod(int period)
   {
     m_pollPeriod = period;
   }
+
   void
   setTimeoutPeriod(int to)
   {
@@ -414,7 +424,7 @@ main(int argc, char* argv[])
   int num_lines = 0;
    
   // Parse cmd-line arguments
-  while ((option = getopt(argc, argv, "hn:f:s:t:r:d:lk:i:y:")) != -1)
+  while ((option = getopt(argc, argv, "hn:f:s:t:r:d:lk:i:y:x")) != -1)
   {
     switch (option)
     {
@@ -447,16 +457,18 @@ main(int argc, char* argv[])
       case 'l':
         LOCAL = 1;
         ndnmapServer.setTime(); //set time for log file name
-	break;
+	      break;
       case 'i':
         ndnmapServer.addScriptTarget(optarg);
+        ++num_lines;
         break;
       case 'y':
         ndnmapServer.addScript(optarg);
         ndnmapServer.sendInterests();
         ndnmapServer.processSingleEvent();
-       // ndnmapServer.startScheduling();
-       // ndnmapServer.run();
+        break;
+      case 'x':
+        COLLECTOR = 0;
         break;
       default:
       case 'h':
@@ -464,11 +476,13 @@ main(int argc, char* argv[])
         break;
     }
   }
+
   if (num_lines < 1)
   {
-   // ndnmapServer.usage();
+    ndnmapServer.usage();
     return 1;
   }
+
   // read link pairs from input file
   if(DEBUG)
     std::cout << "Read from input file" << std::endl;
