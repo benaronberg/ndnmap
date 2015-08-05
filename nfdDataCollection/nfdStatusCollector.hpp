@@ -25,7 +25,9 @@ namespace statusCollector
       TX              = 131,
       RX              = 132,
       FaceId          = 133,
-      CurrentTime     = 134
+      CurrentTime     = 134,
+      ScriptPacket    = 135,
+      ScriptData      = 136
     };
   }
 }
@@ -328,6 +330,98 @@ public:
   }
 //private:
   std::vector<FaceStatus> m_statusList;
+};
+
+class ScriptReply 
+{
+public:
+  ScriptReply(){};
+  explicit
+  ScriptReply(const Block& block)
+  {
+    this->wireDecode(block);
+  }
+  
+  template<bool T>
+  size_t
+  wireEncode(EncodingImpl<T>& encoder) const
+  {
+    size_t bytes_encoded = 0;
+
+    bytes_encoded += prependByteArrayBlock(encoder, ndn::statusCollector::tlv::ScriptData, reinterpret_cast<const uint8_t*>(m_data.c_str()), m_data.size());
+
+    std::cout << "Bytes_encoded: " << bytes_encoded << std::endl;
+    
+    bytes_encoded += encoder.prependVarNumber(bytes_encoded);
+    bytes_encoded += encoder.prependVarNumber(statusCollector::tlv::ScriptPacket);
+    return bytes_encoded; 
+  }
+  
+  const Block&
+  wireEncode()
+  {
+    if (m_block.hasWire())
+      return m_block;
+  
+    EncodingEstimator estimator;
+    size_t estimatedSize = wireEncode(estimator);
+
+    EncodingBuffer buffer(estimatedSize, 0);
+    wireEncode(buffer);
+
+    m_block = buffer.block();
+    return m_block;
+  }
+
+  void
+  wireDecode(const Block& block)
+  {
+    if (block.type() != statusCollector::tlv::ScriptPacket)
+    {
+      std::stringstream error;
+      error << "Expected ScriptPacket block, but block is of different type: #" << block.type();
+      std::cerr << error.str() << std::endl;
+    }
+  
+    m_block = block;
+    m_block.parse();
+
+    Block::element_const_iterator val = m_block.elements_begin();
+    Block::element_const_iterator oldVal; 
+
+    while (val != m_block.elements_end())
+    {
+      oldVal = val;
+
+      if (val != m_block.elements_end() && val->type() == ndn::statusCollector::tlv::ScriptData)
+      {
+        m_data.assign(reinterpret_cast<const char*>(val->value()), val->value_size());
+        ++val;
+      }
+      if(oldVal == val)
+      {
+        std::cout << "ERROR!!: About to exit" << std::endl;
+        exit(1);
+      }
+    } 
+  }
+
+  void
+  setData(std::string& data)
+  {
+    m_data = data;
+  }
+
+  const std::string&
+  getData() const
+  {
+    return m_data;
+  }
+  
+private:
+  std::string m_data;
+  mutable Block m_block;
+
 };
 }
 #endif

@@ -81,7 +81,6 @@ public:
   onData(const ndn::Interest& interest, ndn::Data& data, std::string linkPrefix)
   {
     std::cout << "Data received for: " << interest.getName() << std::endl;
-    std::cout << "Link prefix is " << linkPrefix << std::endl;  
 
     CollectorData reply;   
  
@@ -98,7 +97,7 @@ public:
       {
         std::cerr << "received data is empty!!" << std::endl;
       }
-      //** store server data locally
+  
       if(LOCAL) 
       {
         std::ofstream logfile;
@@ -150,20 +149,43 @@ public:
       } 
     } 
   } 
- 
+
   void
   decodeScriptReply(ndn::Data& data)
   { 
-    ndn::Block block;  
-    block = data.getContent(); 
-    std::vector<char> buffer; 
-    int i = 0;
+     ScriptReply reply;
+ 
+     reply.wireDecode(data.getContent().blockFromValue());
+ 
+     std::string buffer;
+     int interestNameSize = data.getName().size();
+     buffer += data.getName().get(--interestNameSize).toUri();
+     buffer += ": ";
+     buffer += reply.getData();
 
-    for (auto it = block.begin(); it != block.end(); it++)
-    {
-      buffer[i] = block[it];
-      ++i;
-    }
+     if(LOCAL)
+     {
+       storeLocally(buffer); 
+     } else {
+       std::cout << buffer << std::endl;
+     }
+  }
+  
+  void
+  storeLocally(std::string& buffer)
+  {
+   std::ofstream logfile;
+
+   logfile.open( "nfdstat_"+getTime()+".log", std::ofstream::app);
+   if(logfile.is_open())
+   {
+     logfile << buffer; 
+   }
+   else if(logfile==NULL)
+   {
+     std::cerr << "Error opening logfile for write" << std::endl;
+   }
+   logfile.close();
   }
  
   void
@@ -203,29 +225,28 @@ public:
       if(DEBUG)
           std::cout << "sent: " << name << std::endl;
 
-//Create a single interest with script names, ie (/ndn/.../script1/script2/...)
       if(!m_scriptsList.empty())
       {
-        ndn::Name scripts(it->first+SCRIPT_SUFFIX);
         for(auto iter = m_scriptsList.begin(); iter != m_scriptsList.end(); ++iter) 
         {
-        //ndn::Name scripts(it->first+APP_SUFFIX);
+          ndn::Name scripts(it->first+SCRIPT_SUFFIX);
           ndn::Name::Component a_script(*iter);
 if(DEBUG) std::cout << "Appending component " << a_script << std::endl;
           if (!a_script.empty())
+          {
             scripts.append(a_script);
-        }
 
-        ndn::Interest j(scripts);
-        j.setInterestLifetime(ndn::time::milliseconds(m_timeoutPeriod));
-        j.setMustBeFresh(true);
+            ndn::Interest j(scripts);
+            j.setInterestLifetime(ndn::time::milliseconds(m_timeoutPeriod));
+            j.setMustBeFresh(true);
 
-        m_face.expressInterest(j,
+            m_face.expressInterest(j,
                                 bind(&NdnMapServer::onData, this, _1, _2, it->first),
                                 bind(&NdnMapServer::onTimeout, this, _1));
-        if(DEBUG) std::cout << "SENT: " << scripts << std::endl;
-
-      //m_face.processEvents(ndn::time::milliseconds(m_timeoutPeriod));
+            if(DEBUG) std::cout << "SENT: " << scripts << std::endl;
+          }
+        }
+    //  m_face.processEvents(ndn::time::milliseconds(m_timeoutPeriod));
       }
     }
     // schedule the next fetch
@@ -269,6 +290,12 @@ if(DEBUG) std::cout << "Appending component " << a_script << std::endl;
   }
 
   void
+  processSingleEvent()
+  {
+std::cout << "processing single event" << std::endl;
+    m_face.processEvents(ndn::time::milliseconds(m_timeoutPeriod));
+  }
+  void
   parseScriptList(std::string filename)
   {
     std::fstream script_file;
@@ -286,6 +313,34 @@ if(DEBUG) std::cout << "Appending component " << a_script << std::endl;
       getline(script_file, script_line); 
       m_scriptsList.push_back(script_line);
     }
+  }
+  
+  void
+  addScript(std::string script)
+  {
+std::cout << "added script" << std::endl;
+    m_scriptsList.push_back(script);
+  }
+
+  void
+  addScriptTarget(std::string target)
+  {
+std::cout << "In addScriptTarget" << std::endl;
+    if (!m_linksList.empty())
+    {
+      std::cout << "-i option cannot be used with -f or -k" << std::endl;
+      exit(1); 
+    }
+std::cout << "creating link pair" << std::endl;
+    linkPair link_pair;
+
+    link_pair.linkId = 0;
+    link_pair.linkIp = target;     
+
+    std::list<linkPair> targetList;
+    targetList.push_back(link_pair);
+    std::pair<std::string,std::list<linkPair>> pair(target,targetList);
+    m_linksList.insert(pair);
   }
 
   std::string
@@ -359,7 +414,7 @@ main(int argc, char* argv[])
   int num_lines = 0;
    
   // Parse cmd-line arguments
-  while ((option = getopt(argc, argv, "hn:f:s:t:r:d:lk:")) != -1)
+  while ((option = getopt(argc, argv, "hn:f:s:t:r:d:lk:i:y:")) != -1)
   {
     switch (option)
     {
@@ -393,6 +448,16 @@ main(int argc, char* argv[])
         LOCAL = 1;
         ndnmapServer.setTime(); //set time for log file name
 	break;
+      case 'i':
+        ndnmapServer.addScriptTarget(optarg);
+        break;
+      case 'y':
+        ndnmapServer.addScript(optarg);
+        ndnmapServer.sendInterests();
+        ndnmapServer.processSingleEvent();
+       // ndnmapServer.startScheduling();
+       // ndnmapServer.run();
+        break;
       default:
       case 'h':
         ndnmapServer.usage();
@@ -401,7 +466,7 @@ main(int argc, char* argv[])
   }
   if (num_lines < 1)
   {
-    ndnmapServer.usage();
+   // ndnmapServer.usage();
     return 1;
   }
   // read link pairs from input file

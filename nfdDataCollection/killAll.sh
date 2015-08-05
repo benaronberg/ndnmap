@@ -28,10 +28,6 @@ do
     ssh ${!ROUTER} "killall nfd ; killall nlsr"
     killed_nfd+=("$ROUTER")
   fi
-  ssh ${!HOST} "killall nfd" 
+  ssh ${!HOST} "killall nfd ; killall nfdstat_c" 
 done
-
-echo "sleep 10 to give nfd from clients and servers to dump gmon.out if they are. Then rtr can be the last"
-
-sleep 10
 

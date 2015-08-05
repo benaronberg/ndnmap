@@ -22,12 +22,8 @@ do
   HOST=${pair_info[1]}
   SITE=${site_info[1]}
   ROUTER=${pair_info[0]}
-  echo "nfdstat_c -p $INTEREST_FILTER/$SITE for $ROUTER"
-  ssh ${!ROUTER} "cd $CWD ; ./build/nfdstat_c -p $INTEREST_FILTER/$SITE/ndnmap/stats -d 1 >> /dev/null 2>&1 &"
+  echo "nfdstat_c -p $INTEREST_FILTER/$SITE/script for $ROUTER"
+  ssh ${!ROUTER} "cd $CWD ; ./build/nfdstat_c -p $INTEREST_FILTER/$SITE/script -d 1 >> /dev/null 2>&1 &"
   count=$((count+1))
 done
-
-# start nfdstat_s on WU host
-echo "start nfdstat_s"
-ssh $h10x2 "cd $CWD ; ./build/nfdstat_s -f linksList -n 18 -d 1 -l"
 

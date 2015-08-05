@@ -181,16 +181,17 @@ namespace ndn {
       
       //run scripts if requested by server
       ndn::Name cmpName(getFilter()+SCRIPT_SUFFIX);
+std::cout << "cmpName: " << cmpName.toUri() << std::endl;
       int num_components = cmpName.size();
       if(cmpName.isPrefixOf(interestName))
       {
         int numberOfComponents = interestName.size();
 	for(int i = num_components; i < numberOfComponents; ++i)
-        { 
+        {
+std::cout << "pushing to scripts list: " << interestName[i].toUri() << std::endl; 
           m_scriptsList.push_front(interestName[i].toUri());
         }
-        ndn::Block block = runScripts(); 
-        replyWithScriptData(block, interestName);
+        runScripts(interestName);
       } else {
         int numberOfComponents = interestName.size();
         if(!m_remoteLinks.empty())
@@ -260,8 +261,8 @@ namespace ndn {
       BUF_SIZE = bufSize;    
     }
 
-    ndn::Block
-    runScripts()
+    void
+    runScripts(ndn::Name& interestName)
     {
       std::string result, tmpString;
       std::string prefix = "./";
@@ -275,7 +276,8 @@ namespace ndn {
         cmd = tmpString.c_str();
         if(DEBUG) std::cout << "running " << cmd << std::endl;
         pipe = popen(cmd, "r");
-        if (!pipe) std::cerr << "Unable to run " << cmd << " - is the script in the nfdDataCollection directory?" << std::endl;
+        if (!pipe) 
+          std::cerr << "Unable to run " << cmd << " - is the script in the nfdDataCollection directory?" << std::endl;
         result = "";
         while(!feof(pipe)) 
         {
@@ -285,27 +287,17 @@ namespace ndn {
         pclose(pipe);
         m_scriptsList.pop_front();
         if(DEBUG) std::cout <<  "Got data: " << result << std::endl;
-      }  
-      result.copy(buf, sizeof(result), 0);
-      if(DEBUG) std::cout << "ABOUT TO CONSTRUCT BLOCK" << std::endl << "sizeof(result) = " << sizeof(result) << std::endl;
-      ndn::Block block(buf, BUF_SIZE);
-      if(DEBUG) std::cout << "CONSTRUCTED BLOCK" << std::endl;
-      return block;  
-    }
-   
-    void
-    replyWithScriptData(ndn::Block& block, ndn::Name& interestName)
-    {     
-if(DEBUG) std::cout << "Made it to replyWithScriptData" << std::endl;
-      ndn::shared_ptr<ndn::Data> data = ndn::make_shared<ndn::Data>(interestName);
-      block.encode();
-if(DEBUG) std::cout << "block.hasWire() = " << block.hasWire() << std::endl;
-      data->setContent(block);
-      data->setFreshnessPeriod(time::seconds(0));
-      m_keyChain.sign(*data);
-      m_face.put(*data);  
-    }
+       
+        ScriptReply script_reply;
+        script_reply.setData(result);
+        ndn::shared_ptr<ndn::Data> data = ndn::make_shared<ndn::Data>(interestName);
+        data->setContent(script_reply.wireEncode());
+        data->setFreshnessPeriod(time::seconds(0));
 
+        m_keyChain.sign(*data);
+        m_face.put(*data);  
+      }
+    }
   private:
 //    boost::asio::io_service ioService;
     std::string m_programName;

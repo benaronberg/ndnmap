@@ -4,10 +4,10 @@ source ~/.topology
 source hosts 
 
 PROTO="udp4"
-if [ $# -eq 1 ]
-then
-  PROTO="$1"
-fi
+#if [ $# -eq 1 ]
+#then
+#  PROTO="$1"
+#fi
 
 CWD=`pwd`
 
@@ -16,5 +16,5 @@ CWD=`pwd`
 echo "configuring hosts"
 ./configHosts.sh ${PROTO}
 echo "configuring Routers"
-./configRouters.sh ${PROTO}
+./configRouters.sh $1
 
