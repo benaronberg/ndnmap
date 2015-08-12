@@ -13,6 +13,7 @@ for s in "${ROUTER_HOST_PAIRS[@]}"
 do
   pair_info=(${s//:/ })
   ROUTER=${pair_info[0]}
+
   HOST=${pair_info[1]}
   echo "start_nfd.sh, nfd: $ROUTER, $HOST"
   # array_contains defined in helperFunctions

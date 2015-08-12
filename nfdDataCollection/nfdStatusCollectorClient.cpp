@@ -218,7 +218,7 @@ namespace ndn {
 
       while (!m_scriptsList.empty())
       {
-        tmpString = prefix + m_scriptsList.front();
+        tmpString = prefix + m_scriptsList.front() + ' ' + interestName.toUri();
         cmd = tmpString.c_str();
 
         if(DEBUG) std::cout << "running " << cmd << std::endl;

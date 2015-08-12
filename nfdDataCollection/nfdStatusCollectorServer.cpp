@@ -48,7 +48,8 @@ public:
   {
     std::cout << "\n Usage:\n " << m_programName <<
     ""
-    "[-h] -f link_file -n number_of_linkids [-k script_file] [-s map_addr] [-t poll_period] [-r timeout_period] [-d debug_mode] [-l store locally] [-p get PIDs]\n"
+    "[-h] -f link_file -n number_of_linkids [-k script_file] [-s map_addr] [-t poll_period] [-r timeout_period]\n"
+    "[-d debug_mode] [-l store locally] [-i specify target] [-specify script] [-x suppress collector]\n"
     " Poll the status of remote clients and update ndnmap website with the status of the links."
     "\n"
     " The clients to pull from are specified in the input file, as well as their requested links "
@@ -71,10 +72,15 @@ public:
     "\n"
     "  -r timeout_period \t- in milliseconds, default is 500 ms"
     "\n"
-    "  -d debug mode \t- 1 set debug on, 0 set debug off (default)"   "\n" 
-    "  -l store locally \t- store collected data in log file\n"
-    "  -i specify target \t- send an interest to a single node (must be used with -y option\n"
-    "  -y specify script \t- run a single script on target node (must be used with -i option\n"
+    "  -d debug mode \t- 1 set debug on, 0 set debug off (default)"   
+    "\n" 
+    "  -l store locally \t- store collected data in log file"
+    "\n"
+    "  -i specify target \t- send an interest to a single node (must be used with -y option)"
+    "\n"
+    "  -y specify script \t- run a single script on target node (must be used with -i option)"
+    "                  \t\t  automatically sets -x flag"
+    "\n"
     "  -x suppress Collector requests\n"
     << std::endl;
     exit(1);
@@ -89,7 +95,7 @@ public:
  
     // check if data is from script request
     ndn::Name cmpName(linkPrefix+SCRIPT_SUFFIX);
-    if (cmpName.isPrefixOf(interest.getName())) 
+    if (cmpName.isPrefixOf(interest.getName()) )
     {
       decodeScriptReply(data);
     }
@@ -109,11 +115,10 @@ public:
         logfile.open( "nfdstat_"+getTime()+".log", std::ofstream::app);
         if(logfile.is_open()) 
         {
-          //for (unsigned i=0; i< reply.m_statusList.size(); i++)
-          //{
-            logfile << reply;
-            //"---LinkId " << i << std::endl << "FaceID: " << reply.m_statusList[i].getFaceId() << std::endl << "LinkIP: " << reply.m_statusList[i].getLinkIp() << std::endl << "Tx: " << reply.m_statusList[i].getTx() << std::endl << "Rx: " << reply.m_statusList[i].getRx() << std::endl << "Timestamp: " << reply.m_statusList[i].getTimestamp() << std::endl << std::endl;
-          //}
+          for (unsigned i=0; i< reply.m_statusList.size(); i++)
+          {
+            logfile << interest.getName() << std::endl << "FaceID: " << reply.m_statusList[i].getFaceId() << std::endl << "LinkIP: " << reply.m_statusList[i].getLinkIp() << std::endl << "Tx: " << reply.m_statusList[i].getTx() << std::endl << "Rx: " << reply.m_statusList[i].getRx() << std::endl << "Timestamp: " << reply.m_statusList[i].getTimestamp() << std::endl << std::endl;
+          }
         } 
         else if(logfile==NULL) 
         {
@@ -157,16 +162,18 @@ public:
 
   void
   decodeScriptReply(ndn::Data& data)
-  { 
+  {
      ScriptReply reply;
  
      reply.wireDecode(data.getContent().blockFromValue());
  
      std::string buffer;
      int interestNameSize = data.getName().size();
-     buffer += data.getName().get(--interestNameSize).toUri();
-     buffer += ": ";
+   //  buffer += data.getName().get(--interestNameSize).toUri();
+     buffer += data.getName().toUri();
+     buffer += ": \n";
      buffer += reply.getData();
+     buffer += "\n";
 
      if(LOCAL)
        storeLocally(buffer); 
@@ -234,7 +241,7 @@ public:
       {
         for(auto iter = m_scriptsList.begin(); iter != m_scriptsList.end(); ++iter) 
         {
-          ndn::Name scripts(it->first+SCRIPT_SUFFIX);
+          ndn::Name scripts(it->first+SCRIPT_SUFFIX+SCRIPT_SUFFIX);
           ndn::Name::Component a_script(*iter);
 
           if (!a_script.empty())
@@ -248,14 +255,22 @@ public:
             m_face.expressInterest(j,
                                 bind(&NdnMapServer::onData, this, _1, _2, it->first),
                                 bind(&NdnMapServer::onTimeout, this, _1));
+
             if(DEBUG) std::cout << "SENT: " << scripts << std::endl;
           }
         }
       }
     
     }
-    // schedule the next fetch
-    m_scheduler.scheduleEvent(time::seconds(m_pollPeriod), bind(&NdnMapServer::sendInterests, this));
+
+    // schedule the next fetch or exit if only sending a single interest
+    if (!singleScript)
+    {
+      m_scheduler.scheduleEvent(time::seconds(m_pollPeriod), bind(&NdnMapServer::sendInterests, this));
+    } else {
+      processSingleEvent();
+      exit(0);
+    }
   }
 
   void
@@ -348,9 +363,18 @@ public:
   void
   processSingleEvent()
   {
-    m_face.processEvents(ndn::time::milliseconds(m_timeoutPeriod));
+std::cout << "processing single event" << std::endl;
+    m_face.processEvents(time::seconds(m_timeoutPeriod));
+  }
+  
+  void
+  setSingleScript(int val)
+  {
+      singleScript = val;
   }
 
+  int getFlag() { return singleScript; }
+  
   std::string
   getTime()
   {
@@ -411,6 +435,7 @@ private:
   int m_timeoutPeriod;
   std::string m_mapServerAddr;
   std::string m_time;
+  int singleScript;
 
 };
 }
@@ -422,6 +447,8 @@ main(int argc, char* argv[])
   int option;
   std::fstream file;
   int num_lines = 0;
+  ndnmapServer.setSingleScript(0);
+std::cout << "Single script flag at start: " << ndnmapServer.getFlag() << std::endl;
    
   // Parse cmd-line arguments
   while ((option = getopt(argc, argv, "hn:f:s:t:r:d:lk:i:y:x")) != -1)
@@ -457,15 +484,13 @@ main(int argc, char* argv[])
       case 'l':
         LOCAL = 1;
         ndnmapServer.setTime(); //set time for log file name
-	      break;
+	break;
       case 'i':
         ndnmapServer.addScriptTarget(optarg);
-        ++num_lines;
         break;
       case 'y':
-        ndnmapServer.addScript(optarg);
-        ndnmapServer.sendInterests();
-        ndnmapServer.processSingleEvent();
+        ndnmapServer.setSingleScript(1);
+        ndnmapServer.addScript(optarg); 
         break;
       case 'x':
         COLLECTOR = 0;
@@ -477,7 +502,9 @@ main(int argc, char* argv[])
     }
   }
 
-  if (num_lines < 1)
+std::cout << "FLAG: " << ndnmapServer.getFlag() << std::endl;
+
+  if (num_lines < 1 && !ndnmapServer.getFlag())
   {
     ndnmapServer.usage();
     return 1;
